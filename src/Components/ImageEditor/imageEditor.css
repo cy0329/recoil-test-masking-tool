@@ -1,0 +1,31 @@
+.section{
+    width: 100%;
+    height: 100%;
+    display: grid;
+    justify-items: center;
+}
+
+canvas {
+    position: absolute;
+}
+
+#image-layer {
+    z-index: -10;
+    /*margin-top: 26px;*/
+}
+
+/*#front-layer {*/
+/*    z-index: -8;*/
+/*    !*margin-top: 26px;*!*/
+/*}*/
+
+#result-layer {
+    z-index: -9;
+    /*margin-top: 26px;*/
+}
+
+#mouse-coordinator {
+    position: absolute;
+    z-index: 0;
+    margin-top: 26px;
+}
