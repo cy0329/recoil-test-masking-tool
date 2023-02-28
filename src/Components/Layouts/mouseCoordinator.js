@@ -1,6 +1,6 @@
 import React, {useEffect, useRef} from "react";
 import $ from '../../../node_modules/jquery/dist/jquery.min.js';
-import "./mouseCoordinator.css"
+import "./MouseCoordinator.css"
 
 
 function MouseCoordinator({ref1}) {

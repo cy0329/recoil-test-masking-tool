@@ -2,7 +2,7 @@ import React, {useState} from 'react';
 import Draggable from 'react-draggable';
 import $ from '../../../node_modules/jquery/dist/jquery.min.js';
 
-import './jobsbar.css'
+import './Jobsbar.css'
 import appear2 from "../../assets/appear2.png";
 import appear1 from "../../assets/appear1.png";
 import {useRecoilState} from "recoil";

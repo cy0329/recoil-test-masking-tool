@@ -6,14 +6,20 @@ import {
   useRecoilState,
   useRecoilValue,
 } from 'recoil';
-import ImageEditor from "./Components/ImageEditor/ImageEditor";
+import { Route, Routes } from "react-router-dom";
+
 import './App.css'
 
+import ImageEditor from "./Components/ImageEditor/ImageEditor";
+// import PolygonEditor from "./Components/Test/testPolygonEditor";
 
 function App() {
   return (
     <RecoilRoot>
-      <ImageEditor />
+      <Routes>
+        <Route path="/" element={<ImageEditor/>}/>
+        {/*<Route path="/polygon" element={<PolygonEditor/>}/>*/}
+      </Routes>
     </RecoilRoot>
   );
 }

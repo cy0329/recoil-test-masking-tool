@@ -1,19 +1,33 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useMemo, useState} from 'react'
 import MagicWand from "magic-wand-tool"
-import $ from '../../../node_modules/jquery/dist/jquery.min.js';
-
-import Paper from 'paper'
+import {useRecoilState, useRecoilValue} from "recoil";
 
 
-export function Nukki({imgRef, rstRef}) {
+import {
+  alreadyDrewPolygonState,
+  csState,
+  imageInfoState,
+  nukkiModeState,
+  polygonObjListState
+} from "../../stateManagement/atoms/Nukki/nukkiAtom";
+import {drawPolygon} from "../../Polygon/Polygon";
+
+
+function NukkiPolygon({imgRef, rstRef}) {
+  const [tempCs, setTempCs] = useRecoilState(csState)
+  const [tempImageInfo, setTempImageInfo] = useRecoilState(imageInfoState)
+
+  const [polygonObjList, setPolygonObjList] = useRecoilState(polygonObjListState)
+  const [drewPlgList, setDrewPlgList] = useRecoilState(alreadyDrewPolygonState)
+  const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
+
+
+  // 누끼에서 필요한 변수들 (상태값이면 안됨)
   let colorThreshold = 15;
   let blurRadius = 5;
-  let simplifyTolerant = 0;
+  let simplifyTolerant = 3;
   let simplifyCount = 30;
-  let hatchLength = 4;
-  let hatchOffset = 0;
   let imageInfo = null
-  let cacheInd = null;
   let mask = null;
   let oldMask = null;
   let downPoint = null;
@@ -21,18 +35,17 @@ export function Nukki({imgRef, rstRef}) {
   let addMode = false;
   let currentThreshold = colorThreshold;
 
-  let resultLayer = null;
+  // ===== console log 영역 =====
+  // console.log('Nukki 리렌더')
+  // console.log('nukkipolygon polygonObjList: ', polygonObjList)
 
-  console.log('리렌더')
-
+  // ============================
   // imageInfo 초기 설정
   useEffect(() => {
     function initImageInfo() {
-
       const imgCtx = imgRef.current.getContext('2d')
       const rstCtx = rstRef.current.getContext('2d')
       const imageData = imgCtx.getImageData(0, 0, imgCtx.canvas.width, imgCtx.canvas.height)
-      // console.log(imgCtx.canvas.width, imgCtx.canvas.height)
       imageInfo = {
         width: imageData.width,
         height: imageData.height,
@@ -41,23 +54,32 @@ export function Nukki({imgRef, rstRef}) {
         data: imageData
       };
       mask = null;
-      // console.log('initImageInfo 실행')
-      // console.log(imageInfo)
+      setTempImageInfo(imageInfo)
     }
 
-    setTimeout(() => initImageInfo(), 1000)
-
-  }, [imgRef.current, rstRef.current])
+    setTimeout(() => initImageInfo(), 50)
+  }, [imgRef.current])
 
   useEffect(() => {
     if (rstRef.current.id === 'result-layer') {
       rstRef.current.addEventListener('mousedown', (e) => onMouseDown(e))
       rstRef.current.addEventListener('mousemove', (e) => onMouseMove(e))
       rstRef.current.addEventListener('mouseup', (e) => onMouseUp(e))
-      // frtRef.current.removeEventListener('mouseclick')
-      // console.log('이벤트리스너 등록')
+      console.log("==============누끼모드 변경==============")
     }
-  }, [rstRef.current])
+
+  }, [rstRef.current, polygonObjList])
+
+
+  // 마스킹 할 때마다 이미 있는 폴리곤들 다시 그림
+  useEffect(() => {
+    console.log("tempCs 변경되서 다시 탐")
+    // console.log('tempCs: ', tempCs)
+    for (let plgObj of polygonObjList) {
+      drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
+    }
+  }, [tempCs])
+
 
 
   function getMousePosition(e) {
@@ -68,28 +90,28 @@ export function Nukki({imgRef, rstRef}) {
     return {x: x, y: y};
   }
 
-  let hatchTickInterval = setInterval(function () {
-    hatchTick();
-  }, 300);
-
+  // polygonObjList가 바뀔때 재생성 되어야 함
   function onMouseDown(e) {
     if (e.button === 0) {
-      // console.log('되고 있는거?')
       allowDraw = true;
       addMode = e.ctrlKey;
       downPoint = getMousePosition(e);
-      drawMask(downPoint.x, downPoint.y);
+      handleResultCanvasClickEvent({plgObjList: polygonObjList, rstRef, downPoint, setPolygonObjList, nukkiMode, setNukkiMode})
+      if (nukkiMode) {
+        console.log('누끼모드 온')
+        drawMask(downPoint.x, downPoint.y);
+      } else {
+        console.log("누끼모드 오프")
+      }
     } else {
       allowDraw = false;
       addMode = false;
       oldMask = null;
     }
-    // console.log('allowDraw: ', allowDraw)
   }
 
   function onMouseMove(e) {
     if (allowDraw) {
-      // console.log('허용쪽 실행')
       e.preventDefault()
       let p = getMousePosition(e);
       if (p.x !== downPoint.x || p.y !== downPoint.y) {
@@ -104,11 +126,12 @@ export function Nukki({imgRef, rstRef}) {
         //let thres = Math.min(colorThreshold + Math.floor(len / 3), 255);
         if (thres !== currentThreshold) {
           currentThreshold = thres;
+          // if (nukkiMode) {
           drawMask(downPoint.x, downPoint.y);
+          // }
         }
       }
     }
-    // console.log("실행 완료")
   }
 
 
@@ -117,7 +140,6 @@ export function Nukki({imgRef, rstRef}) {
     addMode = false;
     oldMask = null;
     currentThreshold = colorThreshold;
-    // clearInterval(hatchTickInterval)
   }
 
   async function showThreshold() {
@@ -128,6 +150,7 @@ export function Nukki({imgRef, rstRef}) {
   }
 
   function drawMask(x, y) {
+    // if (!nukkiMode) return;
     if (!imageInfo) return;
 
     // showThreshold();
@@ -145,103 +168,42 @@ export function Nukki({imgRef, rstRef}) {
 
     let old = oldMask ? oldMask.data : null;
 
-    // console.log("image: ", image)
     mask = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
     if (mask) mask = MagicWand.gaussBlurOnlyBorder(mask, blurRadius, old);
 
-    // console.log('mask:', mask)
     if (addMode && oldMask) {
       mask = mask ? concatMasks(mask, oldMask) : oldMask;
     }
 
-    drawBorder(false);
-  }
-
-  function hatchTick() {
-    hatchOffset = (hatchOffset + 1) % (hatchLength * 2);
-    drawBorder(true);
-  }
-
-  function drawBorder(noBorder) {
-    if (!mask) return;
-
-    // console.log("imageWidth", imageInfo.width)
-    // console.log("imageHeight", imageInfo.height)
-    let x, y, i, j, k,
-      w = imageInfo.width,
-      h = imageInfo.height,
-      ctx = imageInfo.context,
-      rstCtx = imageInfo.rstCtx,
-      imgData = rstCtx.createImageData(w, h),
-      res = imgData.data;
-
-
-    if (!noBorder) cacheInd = MagicWand.getBorderIndices(mask);
-
-    // console.log("drawborder 탐", imgData)
-    // console.log("cacheInd: ", cacheInd)
-
-    rstCtx.clearRect(0, 0, w, h);
-
-    let len = cacheInd.length;
-    for (j = 0; j < len; j++) {
-      i = cacheInd[j];
-      x = i % w; // calc x by index
-      y = (i - x) / w; // calc y by index
-      k = (y * w + x) * 4;
-      if ((x + y + hatchOffset) % (hatchLength * 2) < hatchLength) { // detect hatch color
-        res[k + 3] = 255; // black, change only alpha
-      } else {
-        res[k] = 255; // white
-        res[k + 1] = 255;
-        res[k + 2] = 255;
-        res[k + 3] = 255;
-      }
-    }
-
+    // drawBorder();
     trace()
-    // rstCtx.putImageData(imgData, 0, 0);
   }
 
-  document.addEventListener('keypress', function (e) {
-    if (e.key === "Enter"){
-      // trace()
-      paint("5c6fff", 0.5)
-    }
-  })
   function trace() {
     if (!mask) return;
+    // console.log('mask: ', mask)
     let cs = MagicWand.traceContours(mask);
     cs = MagicWand.simplifyContours(cs, simplifyTolerant, simplifyCount);
+    cs = cs.filter(x => !x.inner);
+
     // mask = null;
 
     // draw contours
     let ctx = imageInfo.rstCtx;
-    // ctx.clearRect(0, 0, imageInfo.width, imageInfo.height);
-    //inner
-    ctx.beginPath();
-    for (let i = 0; i < cs.length; i++) {
-      if (!cs[i].inner) continue;
-      let ps = cs[i].points;
-      ctx.moveTo(ps[0].x, ps[0].y);
-      for (let j = 1; j < ps.length; j++) {
-        ctx.lineTo(ps[j].x, ps[j].y);
-      }
-    }
-    ctx.strokeStyle = "red";
-    ctx.stroke();
+    ctx.clearRect(0, 0, imageInfo.width, imageInfo.height);
+    setTempCs(cs)
     //outer
-    ctx.beginPath();
+    let poly = new Path2D()
+    // ctx.beginPath();
     for (let k = 0; k < cs.length; k++) {
-      if (cs[k].inner) continue;
-      let ps2 = cs[k].points;
-      ctx.moveTo(ps2[0].x, ps2[0].y);
-      for (let l = 1; l < ps2.length; l++) {
-        ctx.lineTo(ps2[l].x, ps2[l].y);
+      let pts2 = cs[k].points;
+      poly.moveTo(pts2[0].x, pts2[0].y);
+      for (let l = 1; l < pts2.length; l++) {
+        poly.lineTo(pts2[l].x, pts2[l].y);
       }
     }
     ctx.strokeStyle = "blue";
-    ctx.stroke();
+    ctx.stroke(poly);
   }
 
   function paint(color, alpha) {
@@ -255,7 +217,7 @@ export function Nukki({imgRef, rstRef}) {
       maskW = mask.width,
       w = imageInfo.width,
       h = imageInfo.height,
-      ctx = imageInfo.rstCtx,
+      ctx = imageInfo.plgCtx,
       imgData = ctx.createImageData(w, h),
       res = imgData.data;
 
@@ -270,7 +232,7 @@ export function Nukki({imgRef, rstRef}) {
       }
     }
 
-    mask = null;
+    // mask = null;
 
     ctx.putImageData(imgData, 0, 0);
   }
@@ -337,26 +299,44 @@ export function Nukki({imgRef, rstRef}) {
     };
   }
 
-  // return (
-  //   <>
-  //     <div style={{overflow: "auto"}}>
-  //       <div style={{float: "left", marginRight: "10px"}}>Blur radius:</div>
-  //       <input id="blurRadius" type="text" onChange={(e) => onRadiusChange(e)}
-  //              style={{float: "left", width: "20px", marginRight: "10px"}}/>
-  //       <div id="threshold"></div>
-  //     </div>
-  //     <div>(hold left mouse button and move to change the color threshold)</div>
-  //     <div>(hold the CTRL key to add selection)</div>
-  //     <div className='wrapper'>
-  //       <div className='content'>
-  //         <img id="test-picture" className="picture"/>
-  //         <canvas className="canvas" id="resultCanvas" onMouseUp={(e) => onMouseUp(e)}
-  //                 onMouseDown={(e) => onMouseDown(e)}
-  //                 onMouseMove={(e) => onMouseMove(e)}></canvas>
-  //       </div>
-  //     </div>
-  //   </>
-  // )
 }
 
-export const MemoNukki = React.memo(Nukki)
+export default NukkiPolygon
+
+
+function handleResultCanvasClickEvent({plgObjList, rstRef, downPoint, setPolygonObjList, nukkiMode, setNukkiMode}) {
+  for (let key = 0; key < plgObjList.length; key++) {
+    let polygon = new Path2D()
+    polygon.moveTo(plgObjList[key].points[0].x, plgObjList[key].points[0].y);
+    for (let i = 1; i < plgObjList[key].points.length; i++) {
+      polygon.lineTo(plgObjList[key].points[i].x, plgObjList[key].points[i].y);
+    }
+    if (rstRef.current.getContext('2d').isPointInPath(polygon, downPoint.x, downPoint.y)) {
+      // 폴리곤이 클릭됨
+      console.log('폴리곤 클릭됨')
+      let copyPlgList = [...plgObjList]
+      for (let i = 0; i < copyPlgList.length; i++) {
+        if (copyPlgList[i].key === key + 1) {
+          // console.log(copyPlgList[i])
+          let thisPolygon = {...copyPlgList[i]}
+          thisPolygon.selected = true
+          copyPlgList[i] = thisPolygon
+        } else {
+          let notThisPolygon = {...copyPlgList[i]}
+          notThisPolygon.selected = false
+          copyPlgList[i] = notThisPolygon
+        }
+      }
+      console.log('바뀜 : ', copyPlgList)
+      setPolygonObjList(copyPlgList)
+
+      setNukkiMode(false)
+      break;
+    } else {
+      setNukkiMode(true)
+    }
+  }
+}
+
+
+// 누끼모드 상태값에서 변수로 뺀 상태 백업 02271006

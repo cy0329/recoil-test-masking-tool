@@ -1,30 +1,40 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useMemo, useRef} from 'react';
+import $ from '../../../node_modules/jquery/dist/jquery.min.js';
 
-import './imageEditor.css'
-import {useRecoilState, useRecoilValue} from "recoil";
-import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
+import {RecoilRoot, useRecoilState, useRecoilValue} from "recoil";
+
 import Toolbar from "../Layouts/Toolbar";
-import Jobsbar from "../Layouts/jobsbar";
-import TopMenu from "../Layouts/topMenu";
-import MouseCoordinator from "../Layouts/mouseCoordinator";
-import {MemoNukki} from "../Nukki/Nukki";
+import Jobsbar from "../Layouts/Jobsbar";
+import TopMenu from "../Layouts/TopMenu";
+import MouseCoordinator from "../Layouts/MouseCoordinator";
+import NukkiFabric from "../Nukki/NukkiFabric";
 
+import {filterState} from "../../stateManagement/atoms/canvasFilter/canvasFilterAtom";
+import {csState, nukkiModeState, polygonObjListState} from "../../stateManagement/atoms/Nukki/nukkiAtom";
+
+import './ImageEditor.css'
+import NukkiPolygon from "../Nukki/NukkiPolygon";
+import Polygon from "../../Polygon/Polygon";
 
 const ImageEditor = () => {
   const maxCanvasWidth = window.innerWidth;
   const maxCanvasHeight = window.innerHeight;
 
   const filter = useRecoilValue(filterState)
-  // -------------------------
-  console.log("imageEditor 리렌더")
+  // const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
+  // const [polygonObjList, setPolygonObjList] = useRecoilState(polygonObjListState)
+
+  // -----console.log 영역-----
+  console.log("리렌더")
 
   // -------------------------
 
 
   // 캔버스 useRef로 계속 트래킹
-  const canvasRef1 = useRef(null);
-  const canvasRef2 = useRef(null);
-  const canvasRef3 = useRef(null);
+  const imageCanvasRef = useRef(null);
+  const mouseCdRef = useRef(null);
+  const nukkiResultCanvasRef = useRef(null);
+  // const polygonCanvasRef = useRef(null);
 
 
   const image = new Image();
@@ -32,14 +42,16 @@ const ImageEditor = () => {
 
   // 초기 이미지 세팅 + 필터링 변경시마다 캔버스 적용
   useEffect(() => {
-    // const frontCanvas = canvasRef2.current;
+    // const frontCanvas = mouseCdRef.current;
     // const frtCtx = frontCanvas.getContext('2d')
-    const imgCanvas = canvasRef1.current;
+    const imgCanvas = imageCanvasRef.current;
     const imgCtx = imgCanvas.getContext('2d');
-    const resultCanvas = canvasRef3.current;
+    const resultCanvas = nukkiResultCanvasRef.current;
     const rstCtx = resultCanvas.getContext('2d')
+    // const plgCanvas = polygonCanvasRef.current;
+    // const plgCtx = plgCanvas.getContext('2d')
 
-    const mcDiv = canvasRef2.current;
+    const mcDiv = mouseCdRef.current;
 
     let width;
     let height;
@@ -82,31 +94,33 @@ const ImageEditor = () => {
       // frtCtx.canvas.height = height
       rstCtx.canvas.width = width
       rstCtx.canvas.height = height
+      // plgCtx.canvas.width = width
+      // plgCtx.canvas.height = height
       imgCtx.filter = filter
       imgCtx.drawImage(image, 0, 0, width, height);
 
       mcDiv.style.width = `${width}px`
-      console.log("width: ", width)
-      console.log("height: ", height)
+      // console.log("width: ", width)
+      // console.log("height: ", height)
       mcDiv.style.height = `${height}px`
     }
   });
 
-
-
-  // 캔버스 누끼 이벤트 핸들러 --> 누끼 컴포넌트에서 함수만 가져다 쓰기..?
-  // onMouseDown, onMouseMove 등등 함수들에 상태값 변경을 redux action으로 변경
-
+  document.oncontextmenu = function () {
+    return false
+  }
 
   return (
     <div className="section">
       <TopMenu/>
-      <MemoNukki imgRef={canvasRef1} rstRef={canvasRef3}/>
-      {/*<canvas id="front-layer" ref={canvasRef2}/>*/}
-      <div id="mouse-coordinator" ref={canvasRef2}>
-        <MouseCoordinator ref1={canvasRef1}/>
-        <canvas id="image-layer" ref={canvasRef1}/>
-        <canvas id="result-layer" ref={canvasRef3}/>
+      <NukkiPolygon imgRef={imageCanvasRef} rstRef={nukkiResultCanvasRef}/>
+      <Polygon rstRef={nukkiResultCanvasRef}/>
+      {/*<NukkiFabric imgRef={imageCanvasRef} rstRef={nukkiResultCanvasRef} plgRef={polygonCanvasRef}/>*/}
+      <div id="mouse-coordinator" ref={mouseCdRef}>
+        <MouseCoordinator ref1={imageCanvasRef}/>
+        <canvas id="image-layer" ref={imageCanvasRef}/>
+        <canvas id="result-layer" ref={nukkiResultCanvasRef}/>
+        {/*<canvas id="polygon-layer" ref={polygonCanvasRef} />*/}
       </div>
       <Toolbar/>
       <Jobsbar/>

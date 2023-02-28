@@ -2,7 +2,7 @@ import React, {useEffect, useState} from 'react';
 import Draggable from 'react-draggable';
 import $ from '../../../node_modules/jquery/dist/jquery.min.js';
 
-import './toolbar.css'
+import './Toolbar.css'
 import appear1 from '../../assets/appear1.png'
 import appear2 from '../../assets/appear2.png'
 import {useRecoilState} from "recoil";
@@ -33,7 +33,6 @@ function Toolbar() {
   }
 
   function handleDragPosition(e) {
-    console.log(e)
     if (e.x < 0 || e.x > window.innerWidth || e.y < 0 || e.y > window.innerHeight) {
       onTBClose()
     } else {
