@@ -10,7 +10,7 @@ export const nukkiModeState = atom({
 
 export const csState = atom({
   key: 'nukki/Contours',
-  default: [],
+  default: [{points: []}],
 })
 
 export const maskState = atom({

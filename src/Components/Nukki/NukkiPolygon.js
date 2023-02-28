@@ -17,7 +17,7 @@ function NukkiPolygon({imgRef, rstRef}) {
   const setTempCs = useSetRecoilState(csState)
   const setTempImageInfo = useSetRecoilState(imageInfoState)
 
-  const polygonObjList = useRecoilValue(polygonObjListState)
+  // const polygonObjList = useRecoilValue(polygonObjListState)
   // const [drewPlgList, setDrewPlgList] = useRecoilState(alreadyDrewPolygonState)
   const nukkiMode = useRecoilValue(nukkiModeState)
 
@@ -68,7 +68,7 @@ function NukkiPolygon({imgRef, rstRef}) {
       console.log("==============누끼모드 변경==============")
     }
 
-  }, [rstRef.current])
+  }, [rstRef.current, nukkiMode])
 
 
   // 마스킹 할 때마다 이미 있는 폴리곤들 다시 그림
@@ -239,7 +239,7 @@ function NukkiPolygon({imgRef, rstRef}) {
     // draw contours
     let ctx = imageInfo.rstCtx;
     ctx.clearRect(0, 0, imageInfo.width, imageInfo.height);
-    setTempCs(cs)
+    nukkiMode && setTempCs(cs)
     //outer
     let poly = new Path2D()
     // ctx.beginPath();
