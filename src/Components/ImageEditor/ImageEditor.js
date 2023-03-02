@@ -14,7 +14,7 @@ import {csState, nukkiModeState, polygonObjListState} from "../../stateManagemen
 
 import './ImageEditor.css'
 import NukkiPolygon from "../Nukki/NukkiPolygon";
-import Polygon from "../../Polygon/Polygon";
+import Polygon, {MemoPolygon} from "../../Polygon/Polygon";
 
 const ImageEditor = () => {
   const maxCanvasWidth = window.innerWidth;
@@ -115,6 +115,7 @@ const ImageEditor = () => {
       <TopMenu/>
       <NukkiPolygon imgRef={imageCanvasRef} rstRef={nukkiResultCanvasRef}/>
       <Polygon rstRef={nukkiResultCanvasRef}/>
+      {/*<MemoPolygon rstRef={nukkiResultCanvasRef}/>*/}
       {/*<NukkiFabric imgRef={imageCanvasRef} rstRef={nukkiResultCanvasRef} plgRef={polygonCanvasRef}/>*/}
       <div id="mouse-coordinator" ref={mouseCdRef}>
         <MouseCoordinator ref1={imageCanvasRef}/>

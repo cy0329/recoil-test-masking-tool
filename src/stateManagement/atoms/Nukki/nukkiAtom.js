@@ -23,11 +23,6 @@ export const imageInfoState = atom({
   default: {},
 })
 
-export const clickSomethingState = atom({
-  key: 'nukki/clickSomething',
-  default: false,
-})
-
 
 
 // 폴리곤

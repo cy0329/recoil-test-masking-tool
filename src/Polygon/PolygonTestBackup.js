@@ -1,53 +1,99 @@
 import {useCallback, useEffect, useMemo, useState} from "react";
 import $ from '../../node_modules/jquery/dist/jquery.min.js';
-import {useRecoilState, useRecoilValue} from "recoil";
+import {useRecoilCallback, useRecoilState, useRecoilValue} from "recoil";
 import {
   csState,
   drawPolygonState,
   imageInfoState,
-  polygonObjListState, polygonKeyState, pointsState, alreadyDrewPolygonState
+  polygonObjListState, polygonKeyState, pointsState, alreadyDrewPolygonState, nukkiModeState
 } from "../stateManagement/atoms/Nukki/nukkiAtom";
+import {pointsByCsSelector} from "../stateManagement/selectors/NukkiPolygon/PolygonSelector";
 
-// let rerenderCount = 0
+let rerenderCount = 0
 // let points = []
 let imageInfo = {}
 
 export default function Polygon({rstRef}) {
   // recoil state
-  const tempCs = useRecoilValue(csState)
-  const tempImageInfo = useRecoilValue(imageInfoState)
+  // const tempCs = useRecoilValue(csState)
+  // const [points, setPoints] = useRecoilState(pointsState)
+  const points = useRecoilValue(pointsByCsSelector)
+
+  // const tempImageInfo = useRecoilValue(imageInfoState)
   const [polygonKey, setPolygonKey] = useRecoilState(polygonKeyState)
   const [draw, setDraw] = useRecoilState(drawPolygonState)
-  const [points, setPoints] = useRecoilState(pointsState)
+
   const [polygonObjList, setPolygonObjList] = useRecoilState(polygonObjListState)
   const [drewPlgList, setDrewPlgList] = useRecoilState(alreadyDrewPolygonState)
+  // const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
   // local state
 
 
+  rerenderCount++
   // ===== console.log 영역 =====
-  // rerenderCount ++
-  // console.log("Polygon 리렌더", rerenderCount)
+  console.log("Polygon 리렌더", rerenderCount)
   // console.log("polygonObjList: ", polygonObjList)
   // console.log("points: ", points)
   // console.log("tempCs: ", tempCs)
 
   // console.log("drewPlgList: ", drewPlgList)
+  // console.log('nukkiMode in polygon.js : ', nukkiMode)
   // ===========================
 
   /**
    * polygon 을 그리는데 필요한 points 를
    * param 으로 받아온 cs를 가지고 상태값으로 설정해줌
    */
+  // useEffect(() => {
+  //   if (tempCs[0]) {
+  //     setPoints(tempCs[0].points)
+  //   }
+  // }, [tempCs])
+
+  // useEffect(() => {
+  //   imageInfo = tempImageInfo
+  // }, [tempImageInfo])
 
   useEffect(() => {
-    if (tempCs[0]) {
-      setPoints(tempCs[0].points)
+    if (draw) {
+      savePolygonObjects({polygonObjList, setPolygonObjList, polygonKey, points})
     }
-  }, [tempCs])
+  }, [draw])
 
   useEffect(() => {
-    imageInfo = tempImageInfo
-  }, [tempImageInfo])
+    for (let plgObj of polygonObjList) {
+      console.log("key: ", plgObj.key)
+      if (!drewPlgList.includes(plgObj.key)) {
+        drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
+        setDrewPlgList([...drewPlgList, plgObj.key])
+      }
+      if (plgObj.selected) {
+        drawVertex({points: plgObj.points, rstRef})
+      }
+    }
+    document.addEventListener('mousedown', (e) => {
+      handleResultCanvasClickEvent({
+        plgObjList: polygonObjList,
+        rstRef,
+        event: e,
+        setPolygonObjList,
+        // nukkiMode,
+        // setNukkiMode
+      })
+    })
+    console.log("added")
+  }, [polygonObjList])
+
+
+  // nukki 에서 가져와봄
+  useEffect(() => {
+    console.log("cs가 변경 => points 변경 => drawPolygon")
+    // console.log('tempCs: ', tempCs)
+    for (let plgObj of polygonObjList) {
+      drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
+    }
+  }, [points])
+
 
   function savePolygonObjects({polygonObjList, setPolygonObjList, polygonKey, points}) {
     setPolygonKey(polygonKey + 1)
@@ -69,20 +115,20 @@ export default function Polygon({rstRef}) {
     }
   })
 
+  // useEffect(() => {
+  //   document.addEventListener('mousedown', (e) => {
+  //     handleResultCanvasClickEvent({
+  //       plgObjList: polygonObjList,
+  //       rstRef,
+  //       event: e,
+  //       setPolygonObjList,
+  //       nukkiMode,
+  //       setNukkiMode
+  //     })
+  //   })
+  //   console.log("added")
+  // }, [polygonObjList])
 
-  useEffect(() => {
-    if (draw) {
-      savePolygonObjects({polygonObjList, setPolygonObjList, polygonKey, points})
-    }
-  }, [draw])
-
-  useEffect(() => {
-    for (let plgObj of polygonObjList) {
-      if (!drewPlgList.includes(plgObj.key)) {
-        drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
-      }
-    }
-  }, [polygonObjList])
 }
 
 
@@ -103,18 +149,15 @@ export function drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList}) {
     for (let i = 1; i < plgObj.points.length; i++) {
       polygon.lineTo(plgObj.points[i].x, plgObj.points[i].y);
     }
+
     rstCtx.fillStyle = "rgba(0, 100, 100, 0.5)"
     rstCtx.strokeStyle = "green";
     rstCtx.stroke(polygon);
     rstCtx.fill(polygon)
 
-    if (plgObj.selected) {
-      drawVertex({points: plgObj.points, rstRef})
-    }
-
-    if (!drewPlgList.includes(plgObj.key)) {
-      setDrewPlgList([...drewPlgList, plgObj.key])
-    }
+    // if (plgObj.selected) {
+    //   drawVertex({points: plgObj.points, rstRef})
+    // }
   }
 
 }
@@ -128,34 +171,104 @@ function drawVertex({points, rstRef}) {
     vert.moveTo(points[j].x, points[j].y)
     vert.arc(points[j].x, points[j].y, 3, 0, Math.PI * 2, true)
   }
-
-
   vert.strokeWidth = 1
   rstCtx.fillStyle = 'red'
   rstCtx.strokeStyle = "red"
   rstCtx.stroke(vert)
   rstCtx.fill(vert)
 
-  // resultCanvas.onClick = onVertMouseDown(window.event)
-  //
-  // function onVertMouseDown(e) {
-  //   console.log("onVertMouseDown: ", e)
-  //   let x = e.pageX;
-  //   let y = e.pageY;
-  //   if(rstCtx.isPointInPath(vert, x,  y)) {
-  //
-  //   }
-  // }
-  //
-  // function onVertMouseMove() {
-  //
-  // }
-  //
-  // function onVertMouseUp() {
-  //
-  // }
+}
+
+
+/**
+ * 마우스가 폴리곤 안에 들어갔는지 감지
+ */
+function handleResultCanvasClickEvent({plgObjList, rstRef, event, setPolygonObjList/*, nukkiMode, setNukkiMode*/}) {
+
+  let polygon
+  let inPolygon = false
+
+  // if (nukkiMode) {
+  // 클릭 시마다 length 만큼 루프 도는데
+  for (let key = 0; key < plgObjList.length; key++) {
+    polygon = new Path2D()
+    polygon.moveTo(plgObjList[key].points[0].x, plgObjList[key].points[0].y);
+    for (let i = 1; i < plgObjList[key].points.length; i++) {
+      polygon.lineTo(plgObjList[key].points[i].x, plgObjList[key].points[i].y);
+    }
+
+    // let inPolygon = isInside({mousePoint: getMousePosition(event, rstRef), points: plgObjList[key].points})
+    let mousePoint = getMousePosition(event, rstRef)
+    inPolygon = rstRef.current.getContext('2d').isPointInPath(polygon, mousePoint.x, mousePoint.y)
+
+    if (inPolygon) {
+      // 마우스가 폴리곤 내부로 들어감
+      console.log('폴리곤', key, '내부')
+      let copyPlgList = [...plgObjList]
+      for (let i = 0; i < copyPlgList.length; i++) {
+        if (copyPlgList[i].key === key + 1) {
+          // console.log(copyPlgList[i])
+          let thisPolygon = {...copyPlgList[i]}
+          thisPolygon.selected = true
+          copyPlgList[i] = thisPolygon
+        } else {
+          let notThisPolygon = {...copyPlgList[i]}
+          notThisPolygon.selected = false
+          copyPlgList[i] = notThisPolygon
+        }
+      }
+      console.log('폴리곤 클릭 감지 : ', copyPlgList)
+      setPolygonObjList(copyPlgList)
+      break
+    } else {
+      // ===== 외부 클릭 -> 리스트 초기화 =====
+      let resetPlgList = [...plgObjList]
+      for (let k = 0; k < plgObjList.length; k++) {
+        let resetPlg = {...resetPlgList[k]}
+        resetPlg.selected = false
+        resetPlgList[k] = resetPlg
+      }
+      console.log('외부 클릭 감지 : ', resetPlgList)
+      setPolygonObjList(resetPlgList)
+    }
+  }
 }
 
 
 
-// polygon.js로 nukki에 있던 상태값 관련된 내용 옮기기 전 백업 02271007
+function getMousePosition(e, rstRef) {
+  let canvas = rstRef.current
+  let rect = canvas.getBoundingClientRect();
+  let x = Math.round((e.clientX || e.pageX) - rect.left),
+    y = Math.round((e.clientY || e.pageY) - rect.top);
+  return {x: x, y: y};
+}
+
+function isInside({mousePoint, points}) {
+  console.log(mousePoint)
+  console.log(points)
+
+  let crosses = 0;
+  for (let i = 0; i < points.length; i++) {
+    let j = (i + 1) % points.length;
+    // 마우스가 point[i]와 point[j] 사이에 있음
+    // console.log("pointiy: ", points[i].y)
+    console.log("mousey: ", mousePoint.y)
+    console.log("mousex: ", mousePoint.x)
+    if (((points[i].y > mousePoint.y) !== (points[j].y > mousePoint.y))) {
+      console.log('i: ', i, 'j: ', j)
+      let atX = Math.abs(points[j].x - points[i].x) * Math.abs(mousePoint.y - points[i].y) / Math.abs(points[j].y - points[i].y) + (points[i].x > points[j].x ? points[j].x : points[i].x);
+      console.log("let atX = ( jx", points[j].x, " - ix", points[i].x, ") * ( my", mousePoint.y, " - iy", points[i].y, ") / ( jy", points[j].y, " - iy", points[i].y, ") + ix | jx", (points[i].x > points[j].x ? points[j].x : points[i].x), " = ", atX)
+      if (mousePoint.x < atX) {
+        console.log("여기서 올라감")
+        crosses++;
+      }
+    }
+  }
+  console.log(crosses)
+  return crosses % 2 > 0;
+}
+
+
+
+// 230228 테스트 도중 임시 백업

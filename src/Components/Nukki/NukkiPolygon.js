@@ -4,22 +4,24 @@ import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
 
 
 import {
+  allowDrawState,
   alreadyDrewPolygonState,
   csState,
   imageInfoState,
   nukkiModeState,
   polygonObjListState
 } from "../../stateManagement/atoms/Nukki/nukkiAtom";
-import {drawPolygon} from "../../Polygon/Polygon";
+import {drawPolygon, drawVertex, handleResultCanvasClickEvent} from "../../Polygon/Polygon";
 
+let rerenderCount = 0
 
 function NukkiPolygon({imgRef, rstRef}) {
   const setTempCs = useSetRecoilState(csState)
-  const setTempImageInfo = useSetRecoilState(imageInfoState)
+  const [tempImageInfo, setTempImageInfo] = useRecoilState(imageInfoState)
 
-  // const polygonObjList = useRecoilValue(polygonObjListState)
-  // const [drewPlgList, setDrewPlgList] = useRecoilState(alreadyDrewPolygonState)
-  const nukkiMode = useRecoilValue(nukkiModeState)
+  const [polygonObjList, setPolygonObjList] = useRecoilState(polygonObjListState)
+  const [drewPlgList, setDrewPlgList] = useRecoilState(alreadyDrewPolygonState)
+  const [nukkiMode, setNukkiMode] = useRecoilState(nukkiModeState)
 
   // 누끼에서 필요한 변수들 (상태값이면 안됨)
   let colorThreshold = 15;
@@ -34,8 +36,10 @@ function NukkiPolygon({imgRef, rstRef}) {
   let addMode = false;
   let currentThreshold = colorThreshold;
 
+
   // ===== console log 영역 =====
-  // console.log('Nukki 리렌더')
+  rerenderCount++
+  console.log('Nukki 리렌더', rerenderCount)
   // console.log('tempImageInfo: ', tempImageInfo)
   console.log('nukkiMode in nukki.js : ', nukkiMode)
 
@@ -61,25 +65,43 @@ function NukkiPolygon({imgRef, rstRef}) {
   }, [imgRef.current])
 
   useEffect(() => {
-    if (rstRef.current.id === 'result-layer') {
-      rstRef.current.addEventListener('mousedown', (e) => onMouseDown(e))
-      rstRef.current.addEventListener('mousemove', (e) => onMouseMove(e))
-      rstRef.current.addEventListener('mouseup', (e) => onMouseUp(e))
+    if (rstRef.current.id === 'result-layer' && nukkiMode) {
+      rstRef.current.addEventListener('mousedown', onMouseDown)
+      rstRef.current.addEventListener('mousemove', onMouseMove)
+      rstRef.current.addEventListener('mouseup', onMouseUp)
       console.log("==============누끼모드 변경==============")
     }
+    // return () => {
+    //   rstRef.current.removeEventListener('mousedown', onMouseDown)
+    //   rstRef.current.removeEventListener('mousemove', onMouseMove)
+    //   rstRef.current.removeEventListener('mouseup', onMouseUp)
+    // }
 
   }, [rstRef.current, nukkiMode])
 
 
-  // 마스킹 할 때마다 이미 있는 폴리곤들 다시 그림
-  // useEffect(() => {
-  //   console.log("tempCs 변경되서 다시 탐")
-  //   // console.log('tempCs: ', tempCs)
-  //   for (let plgObj of polygonObjList) {
-  //     drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
-  //   }
-  // }, [tempCs])
+  useEffect(() => {
+    for (let plgObj of polygonObjList) {
+      console.log("drewPlgList: ", drewPlgList)
+      if (!drewPlgList.includes(plgObj.key)) {
+        drawPolygon({plgObj, rstRef/*, drewPlgList, setDrewPlgList*/})
+        setDrewPlgList([...drewPlgList, plgObj.key])
+      }
+      if (plgObj.selected) {
+        drawVertex({points: plgObj.points, rstRef})
+      }
+    }
 
+    rstRef.current.addEventListener('mousedown', mouseDownHandler)
+
+    return () => {
+      rstRef.current.removeEventListener('mousedown', mouseDownHandler)
+    }
+  }, [polygonObjList])
+
+  function mouseDownHandler(e) {
+    handleResultCanvasClickEvent({plgObjList: polygonObjList, rstRef, event: e, setPolygonObjList, setNukkiMode, tempImageInfo})
+  }
 
   function getMousePosition(e) {
     let canvas = rstRef.current
@@ -90,103 +112,49 @@ function NukkiPolygon({imgRef, rstRef}) {
   }
 
   // polygonObjList가 바뀔때 재생성 되어야 함
-  // function onMouseDown(e) {
-  //   if (nukkiMode) {
-  //
-  //     if (e.button === 0) {
-  //       allowDraw = true;
-  //       addMode = e.ctrlKey;
-  //       downPoint = getMousePosition(e);
-  //       drawMask(downPoint.x, downPoint.y);
-  //     } else {
-  //       allowDraw = false;
-  //       addMode = false;
-  //       oldMask = null;
-  //     }
-  //
-  //   }
-  // }
-
-  const onMouseDown = useCallback((e) =>{
-    if (nukkiMode) {
-
-      if (e.button === 0) {
-        allowDraw = true;
-        addMode = e.ctrlKey;
-        downPoint = getMousePosition(e);
-        drawMask(downPoint.x, downPoint.y);
-      } else {
-        allowDraw = false;
-        addMode = false;
-        oldMask = null;
-      }
-
+  function onMouseDown(e) {
+    if (e.button === 0) {
+      allowDraw = true;
+      addMode = e.ctrlKey;
+      downPoint = getMousePosition(e);
+      drawMask(downPoint.x, downPoint.y);
+    } else {
+      allowDraw = false;
+      addMode = false;
+      oldMask = null;
     }
-  }, [nukkiMode])
+  }
 
-  // function onMouseMove(e) {
-  //   if (nukkiMode) {
-  //     if (allowDraw) {
-  //       e.preventDefault()
-  //       let p = getMousePosition(e);
-  //       if (p.x !== downPoint.x || p.y !== downPoint.y) {
-  //         let dx = p.x - downPoint.x,
-  //           dy = p.y - downPoint.y,
-  //           len = Math.sqrt(dx * dx + dy * dy),
-  //           adx = Math.abs(dx),
-  //           ady = Math.abs(dy),
-  //           sign = adx > ady ? dx / adx : dy / ady;
-  //         sign = sign < 0 ? sign / 5 : sign / 3;
-  //         let thres = Math.min(Math.max(colorThreshold + Math.floor(sign * len), 1), 255);
-  //         //let thres = Math.min(colorThreshold + Math.floor(len / 3), 255);
-  //         if (thres !== currentThreshold) {
-  //           currentThreshold = thres;
-  //
-  //           drawMask(downPoint.x, downPoint.y);
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
+  function onMouseMove(e) {
+    if (allowDraw) {
+      e.preventDefault()
+      let p = getMousePosition(e);
+      if (p.x !== downPoint.x || p.y !== downPoint.y) {
+        let dx = p.x - downPoint.x,
+          dy = p.y - downPoint.y,
+          len = Math.sqrt(dx * dx + dy * dy),
+          adx = Math.abs(dx),
+          ady = Math.abs(dy),
+          sign = adx > ady ? dx / adx : dy / ady;
+        sign = sign < 0 ? sign / 5 : sign / 3;
+        let thres = Math.min(Math.max(colorThreshold + Math.floor(sign * len), 1), 255);
+        //let thres = Math.min(colorThreshold + Math.floor(len / 3), 255);
+        if (thres !== currentThreshold) {
+          currentThreshold = thres;
 
-  const onMouseMove = useCallback((e) => {
-    if (nukkiMode) {
-      if (allowDraw) {
-        e.preventDefault()
-        let p = getMousePosition(e);
-        if (p.x !== downPoint.x || p.y !== downPoint.y) {
-          let dx = p.x - downPoint.x,
-            dy = p.y - downPoint.y,
-            len = Math.sqrt(dx * dx + dy * dy),
-            adx = Math.abs(dx),
-            ady = Math.abs(dy),
-            sign = adx > ady ? dx / adx : dy / ady;
-          sign = sign < 0 ? sign / 5 : sign / 3;
-          let thres = Math.min(Math.max(colorThreshold + Math.floor(sign * len), 1), 255);
-          //let thres = Math.min(colorThreshold + Math.floor(len / 3), 255);
-          if (thres !== currentThreshold) {
-            currentThreshold = thres;
-
-            drawMask(downPoint.x, downPoint.y);
-          }
+          drawMask(downPoint.x, downPoint.y);
         }
       }
     }
-  }, [nukkiMode])
+  }
 
-  // function onMouseUp(e) {
-  //   allowDraw = false;
-  //   addMode = false;
-  //   oldMask = null;
-  //   currentThreshold = colorThreshold;
-  // }
 
-  const onMouseUp = useCallback((e) => {
+  function onMouseUp(e) {
     allowDraw = false;
     addMode = false;
     oldMask = null;
     currentThreshold = colorThreshold;
-  }, [nukkiMode])
+  }
 
   async function showThreshold() {
     let thresholdDiv = await document.getElementById("tooltip-span")
@@ -196,35 +164,31 @@ function NukkiPolygon({imgRef, rstRef}) {
   }
 
   function drawMask(x, y) {
-    if (nukkiMode) {
-      if (!imageInfo) return;
+    if (!imageInfo) return;
 
-      // showThreshold();
+    // showThreshold();
 
-      let image = {
-        data: imageInfo.data.data,
-        width: imageInfo.width,
-        height: imageInfo.height,
-        bytes: 4
-      };
+    let image = {
+      data: imageInfo.data.data,
+      width: imageInfo.width,
+      height: imageInfo.height,
+      bytes: 4
+    };
 
-      if (addMode && !oldMask) {
-        oldMask = mask;
-      }
-
-      let old = oldMask ? oldMask.data : null;
-
-      mask = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
-      if (mask) mask = MagicWand.gaussBlurOnlyBorder(mask, blurRadius, old);
-
-      if (addMode && oldMask) {
-        mask = mask ? concatMasks(mask, oldMask) : oldMask;
-      }
-
-      // drawBorder();
-      trace()
+    if (addMode && !oldMask) {
+      oldMask = mask;
     }
 
+    let old = oldMask ? oldMask.data : null;
+
+    mask = MagicWand.floodFill(image, x, y, currentThreshold, old, true);
+    if (mask) mask = MagicWand.gaussBlurOnlyBorder(mask, blurRadius, old);
+
+    if (addMode && oldMask) {
+      mask = mask ? concatMasks(mask, oldMask) : oldMask;
+    }
+
+    trace()
   }
 
   function trace() {
@@ -234,12 +198,10 @@ function NukkiPolygon({imgRef, rstRef}) {
     cs = MagicWand.simplifyContours(cs, simplifyTolerant, simplifyCount);
     cs = cs.filter(x => !x.inner);
 
-
-
     // draw contours
     let ctx = imageInfo.rstCtx;
     ctx.clearRect(0, 0, imageInfo.width, imageInfo.height);
-    nukkiMode && setTempCs(cs)
+    setTempCs(cs)
     //outer
     let poly = new Path2D()
     // ctx.beginPath();
@@ -252,50 +214,6 @@ function NukkiPolygon({imgRef, rstRef}) {
     }
     ctx.strokeStyle = "blue";
     ctx.stroke(poly);
-
-    // for (let plgObj of polygonObjList) {
-    //   drawPolygon({plgObj, rstRef, drewPlgList, setDrewPlgList})
-    // }
-  }
-
-  function paint(color, alpha) {
-    if (!mask) return;
-
-    let rgba = hexToRgb(color, alpha);
-
-    let x, y,
-      data = mask.data,
-      bounds = mask.bounds,
-      maskW = mask.width,
-      w = imageInfo.width,
-      h = imageInfo.height,
-      ctx = imageInfo.plgCtx,
-      imgData = ctx.createImageData(w, h),
-      res = imgData.data;
-
-    for (y = bounds.minY; y <= bounds.maxY; y++) {
-      for (x = bounds.minX; x <= bounds.maxX; x++) {
-        if (data[y * maskW + x] === 0) continue;
-        let k = (y * w + x) * 4;
-        res[k] = rgba[0];
-        res[k + 1] = rgba[1];
-        res[k + 2] = rgba[2];
-        res[k + 3] = rgba[3];
-      }
-    }
-
-    // mask = null;
-
-    ctx.putImageData(imgData, 0, 0);
-  }
-
-  function hexToRgb(hex, alpha) {
-    let int = parseInt(hex, 16);
-    let r = (int >> 16) & 255;
-    let g = (int >> 8) & 255;
-    let b = int & 255;
-
-    return [r, g, b, Math.round(alpha * 255)];
   }
 
   function concatMasks(mask, old) {
@@ -350,6 +268,51 @@ function NukkiPolygon({imgRef, rstRef}) {
       bounds: b
     };
   }
+
+
+  /**
+   * 아직 안씀
+   */
+  function paint(color, alpha) {
+    if (!mask) return;
+
+    let rgba = hexToRgb(color, alpha);
+
+    let x, y,
+      data = mask.data,
+      bounds = mask.bounds,
+      maskW = mask.width,
+      w = imageInfo.width,
+      h = imageInfo.height,
+      ctx = imageInfo.rstCtx,
+      imgData = ctx.createImageData(w, h),
+      res = imgData.data;
+
+    for (y = bounds.minY; y <= bounds.maxY; y++) {
+      for (x = bounds.minX; x <= bounds.maxX; x++) {
+        if (data[y * maskW + x] === 0) continue;
+        let k = (y * w + x) * 4;
+        res[k] = rgba[0];
+        res[k + 1] = rgba[1];
+        res[k + 2] = rgba[2];
+        res[k + 3] = rgba[3];
+      }
+    }
+
+    // mask = null;
+
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  function hexToRgb(hex, alpha) {
+    let int = parseInt(hex, 16);
+    let r = (int >> 16) & 255;
+    let g = (int >> 8) & 255;
+    let b = int & 255;
+
+    return [r, g, b, Math.round(alpha * 255)];
+  }
+
 
 }
 
