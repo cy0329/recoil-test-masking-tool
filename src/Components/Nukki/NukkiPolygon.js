@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useMemo, useState} from 'react'
 import MagicWand from "magic-wand-tool"
-import {useRecoilState, useRecoilValue, useSetRecoilState} from "recoil";
+import {useRecoilState, useRecoilValue, useResetRecoilState, useSetRecoilState} from "recoil";
 
 
 import {
@@ -11,12 +11,13 @@ import {
   nukkiModeState,
   polygonObjListState
 } from "../../stateManagement/atoms/Nukki/nukkiAtom";
-import {drawPolygon, drawVertex, handleResultCanvasClickEvent} from "../../Polygon/Polygon";
+import {drawPolygon, drawVertex, /*handleResultCanvasClickEvent*/} from "../../Polygon/Polygon";
 
 let rerenderCount = 0
 
 function NukkiPolygon({imgRef, rstRef}) {
   const setTempCs = useSetRecoilState(csState)
+  const resetTempCs = useResetRecoilState(csState)
   const [tempImageInfo, setTempImageInfo] = useRecoilState(imageInfoState)
 
   const [polygonObjList, setPolygonObjList] = useRecoilState(polygonObjListState)
@@ -26,7 +27,7 @@ function NukkiPolygon({imgRef, rstRef}) {
   // 누끼에서 필요한 변수들 (상태값이면 안됨)
   let colorThreshold = 15;
   let blurRadius = 5;
-  let simplifyTolerant = 3;
+  let simplifyTolerant = 2;
   let simplifyCount = 30;
   let imageInfo = null
   let mask = null;
@@ -65,11 +66,17 @@ function NukkiPolygon({imgRef, rstRef}) {
   }, [imgRef.current])
 
   useEffect(() => {
+    console.log('nukkiMode in addeventlistener useeffect : ', nukkiMode)
     if (rstRef.current.id === 'result-layer' && nukkiMode) {
+      console.log('=====누끼모드 true=====')
       rstRef.current.addEventListener('mousedown', onMouseDown)
       rstRef.current.addEventListener('mousemove', onMouseMove)
       rstRef.current.addEventListener('mouseup', onMouseUp)
-      console.log("==============누끼모드 변경==============")
+    } else if (rstRef.current.id === 'result-layer' && !nukkiMode) {
+      console.log('=====누끼모드 false=====')
+      rstRef.current.removeEventListener('mousedown', onMouseDown)
+      rstRef.current.removeEventListener('mousemove', onMouseMove)
+      rstRef.current.removeEventListener('mouseup', onMouseUp)
     }
     // return () => {
     //   rstRef.current.removeEventListener('mousedown', onMouseDown)
@@ -77,14 +84,13 @@ function NukkiPolygon({imgRef, rstRef}) {
     //   rstRef.current.removeEventListener('mouseup', onMouseUp)
     // }
 
-  }, [rstRef.current, nukkiMode])
+  }, [nukkiMode])
 
 
   useEffect(() => {
     for (let plgObj of polygonObjList) {
-      console.log("drewPlgList: ", drewPlgList)
       if (!drewPlgList.includes(plgObj.key)) {
-        drawPolygon({plgObj, rstRef/*, drewPlgList, setDrewPlgList*/})
+        drawPolygon({plgObj, rstRef})
         setDrewPlgList([...drewPlgList, plgObj.key])
       }
       if (plgObj.selected) {
@@ -100,7 +106,7 @@ function NukkiPolygon({imgRef, rstRef}) {
   }, [polygonObjList])
 
   function mouseDownHandler(e) {
-    handleResultCanvasClickEvent({plgObjList: polygonObjList, rstRef, event: e, setPolygonObjList, setNukkiMode, tempImageInfo})
+    handleResultCanvasClickEvent(e)
   }
 
   function getMousePosition(e) {
@@ -114,10 +120,11 @@ function NukkiPolygon({imgRef, rstRef}) {
   // polygonObjList가 바뀔때 재생성 되어야 함
   function onMouseDown(e) {
     if (e.button === 0) {
-      allowDraw = true;
+      allowDraw = nukkiMode;
       addMode = e.ctrlKey;
       downPoint = getMousePosition(e);
-      drawMask(downPoint.x, downPoint.y);
+      // drawMask(downPoint.x, downPoint.y, true);
+      resetTempCs()
     } else {
       allowDraw = false;
       addMode = false;
@@ -148,7 +155,6 @@ function NukkiPolygon({imgRef, rstRef}) {
     }
   }
 
-
   function onMouseUp(e) {
     allowDraw = false;
     addMode = false;
@@ -156,14 +162,7 @@ function NukkiPolygon({imgRef, rstRef}) {
     currentThreshold = colorThreshold;
   }
 
-  async function showThreshold() {
-    let thresholdDiv = await document.getElementById("tooltip-span")
-    if (thresholdDiv) {
-      thresholdDiv.innerHTML += "<br>Threshold: " + currentThreshold;
-    }
-  }
-
-  function drawMask(x, y) {
+  function drawMask(x, y, fromMouseDownEvent) {
     if (!imageInfo) return;
 
     // showThreshold();
@@ -188,7 +187,9 @@ function NukkiPolygon({imgRef, rstRef}) {
       mask = mask ? concatMasks(mask, oldMask) : oldMask;
     }
 
-    trace()
+    if (!fromMouseDownEvent){
+      trace()
+    }
   }
 
   function trace() {
@@ -201,6 +202,8 @@ function NukkiPolygon({imgRef, rstRef}) {
     // draw contours
     let ctx = imageInfo.rstCtx;
     ctx.clearRect(0, 0, imageInfo.width, imageInfo.height);
+
+    // cs변경시키는 놈은 얘 뿐
     setTempCs(cs)
     //outer
     let poly = new Path2D()
@@ -269,9 +272,63 @@ function NukkiPolygon({imgRef, rstRef}) {
     };
   }
 
+  /**
+   * 로컬 변수 사용하기 위해 함수 이전
+   */
+  function handleResultCanvasClickEvent(e) {
+
+    let clickedPlgKey = 0;
+    for (let k = 0; k < polygonObjList.length; k++) {
+      let polygon = new Path2D()
+      if (polygonObjList[k].points.length > 0) {
+        polygon.moveTo(polygonObjList[k].points[0].x, polygonObjList[k].points[0].y);
+        for (let i = 1; i < polygonObjList[k].points.length; i++) {
+          polygon.lineTo(polygonObjList[k].points[i].x, polygonObjList[k].points[i].y);
+        }
+      }
+
+      let mousePoint = getMousePosition(e)
+      let inPolygon = rstRef.current.getContext('2d').isPointInPath(polygon, mousePoint.x, mousePoint.y)
+
+      if (inPolygon) {
+        // polygon click
+        clickedPlgKey = polygonObjList[k].key
+        setNukkiMode(false)
+      }
+    }
+
+    if (clickedPlgKey === 0) {
+      let copyPlgList = [...polygonObjList]
+      for (let i = 0; i < copyPlgList.length; i++) {
+        let copyObj = {...copyPlgList[i]}
+        copyObj.selected = false;
+        copyPlgList[i] = copyObj
+      }
+      setPolygonObjList(copyPlgList)
+      setNukkiMode(true)
+    } else {
+      let copyPlgList = [...polygonObjList]
+      for (let i = 0; i < copyPlgList.length; i++) {
+        let copyObj = {...copyPlgList[i]}
+        copyObj.selected = copyObj.key === clickedPlgKey;
+        copyPlgList[i] = copyObj
+      }
+      setPolygonObjList(copyPlgList)
+    }
+
+    // 지우고 다시 그리기
+    rstRef.current.getContext('2d').clearRect(0, 0, tempImageInfo.width, tempImageInfo.height)
+    for (let plgObj of polygonObjList) {
+      drawPolygon({plgObj, rstRef})
+    }
+  }
+
 
   /**
    * 아직 안씀
+   * paint
+   * hexToRgb
+   * showThreshold
    */
   function paint(color, alpha) {
     if (!mask) return;
@@ -313,10 +370,12 @@ function NukkiPolygon({imgRef, rstRef}) {
     return [r, g, b, Math.round(alpha * 255)];
   }
 
-
+  async function showThreshold() {
+    let thresholdDiv = await document.getElementById("tooltip-span")
+    if (thresholdDiv) {
+      thresholdDiv.innerHTML += "<br>Threshold: " + currentThreshold;
+    }
+  }
 }
 
 export default NukkiPolygon
-
-
-// 누끼모드 상태값에서 변수로 뺀 상태 백업 02270932
